@@ -12,7 +12,7 @@ import math
 import os
 import random
 import re
-
+import sys
 import numpy as np
 import torch
 import torch.nn as nn
@@ -418,34 +418,56 @@ def pyramid_roi_align(inputs, pool_size, image_shape):
     The width and height are those specific in the pool_shape in the layer
     constructor.
     """
-
+    print('#'*30)
+    #print(type(inputs[0]))
+    #print(input)
+    #sys.exit()
     # Currently only supports batchsize 1
     for i in range(len(inputs)):
         inputs[i] = inputs[i].squeeze(0)
 
     # Crop boxes [batch, num_boxes, (y1, x1, y2, x2)] in normalized coords
     boxes = inputs[0]
+    print('Boxes')
+    print(type(boxes))
+    print(boxes.size())
+    #print(boxes)
 
     # Feature Maps. List of feature maps from different level of the
     # feature pyramid. Each is [batch, height, width, channels]
     feature_maps = inputs[1:]
+    #print('feature maps')
+    #print(feature_maps[0].size())
+    #print(feature_maps[1].size())
+    #print(feature_maps[2].size())
+    #print(feature_maps[3].size())
+    ###########feature maps
+    #torch.Size([256, 256, 256])
+    #torch.Size([256, 128, 128])
+    #torch.Size([256, 64, 64])
+    #torch.Size([256, 32, 32])
 
+    #print(feature_maps[0][0])
     # Assign each ROI to a level in the pyramid based on the ROI area.
     y1, x1, y2, x2 = boxes.chunk(4, dim=1)
     h = y2 - y1
     w = x2 - x1
-
+    #print('Height')
+    #print(h)
     # Equation 1 in the Feature Pyramid Networks paper. Account for
     # the fact that our coordinates are normalized here.
     # e.g. a 224x224 ROI (in pixels) maps to P4
     image_area = Variable(torch.FloatTensor([float(image_shape[0]*image_shape[1])]), requires_grad=False)
+    #print('image area')
+    #print(image_area)
     if boxes.is_cuda:
         image_area = image_area.cuda()
     roi_level = 4 + log2(torch.sqrt(h*w)/(224.0/torch.sqrt(image_area)))
     roi_level = roi_level.round().int()
     roi_level = roi_level.clamp(2,5)
-
-
+    
+    #print('roi level')
+    #print(roi_level)
     # Loop through levels and apply ROI pooling to each. P2 to P5.
     pooled = []
     box_to_level = []
@@ -475,6 +497,10 @@ def pyramid_roi_align(inputs, pool_size, image_shape):
         if level_boxes.is_cuda:
             ind = ind.cuda()
         feature_maps[i] = feature_maps[i].unsqueeze(0)  #CropAndResizeFunction needs batch dimension
+        #print('level boxes')
+        #print(level_boxes)
+        #print('ind')
+        #print(ind)
         pooled_features = CropAndResizeFunction(pool_size, pool_size, 0)(feature_maps[i], level_boxes, ind)
         pooled.append(pooled_features)
 
@@ -488,6 +514,9 @@ def pyramid_roi_align(inputs, pool_size, image_shape):
     # Rearrange pooled features to match the order of the original boxes
     _, box_to_level = torch.sort(box_to_level)
     pooled = pooled[box_to_level, :, :]
+    
+    print('Pooled')
+    print(pooled.size())
 
     return pooled
 
@@ -562,12 +591,27 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
     gt_boxes = gt_boxes.squeeze(0)
     gt_masks = gt_masks.squeeze(0)
 
+
+    print('<>'*100)
+    print('proposals')
+    print(proposals.shape)
+    print('gt_masks')
+    print(gt_masks.size())
+    print(gt_masks)
+    print('gt_boxes')
+    print(gt_boxes.shape)
+    print(gt_boxes)
+    print('gt_class')
+    print(gt_class_ids.shape)
+    print(gt_class_ids)
     # Handle COCO crowds
     # A crowd box in COCO is a bounding box around several instances. Exclude
     # them from training. A crowd box is given a negative class ID.
     if torch.nonzero(gt_class_ids < 0).size():
         crowd_ix = torch.nonzero(gt_class_ids < 0)[:, 0]
         non_crowd_ix = torch.nonzero(gt_class_ids > 0)[:, 0]
+        print('non_crowd_ix.data')
+        print(non_crowd_ix.data)
         crowd_boxes = gt_boxes[crowd_ix.data, :]
         crowd_masks = gt_masks[crowd_ix.data, :, :]
         gt_class_ids = gt_class_ids[non_crowd_ix.data]
@@ -623,7 +667,18 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
         # Assign positive ROIs to GT masks
         roi_masks = gt_masks[roi_gt_box_assignment.data,:,:]
 
-        # Compute mask targets
+        print('roi_gt_box_assignment.data')
+        print(roi_gt_box_assignment.data)
+
+        # Assign positive ROIs to GT masks
+        #print('Gt_masks')
+        #print(gt_masks.size())
+        #print('roi_gt_box_assignment.data')
+        #print(roi_gt_box_assignment.data)
+        #roi_masks = gt_masks[roi_gt_box_assignment.data,:,:]
+        #print('Roi_masks')
+        #print(roi_masks.size())
+        ## Compute mask targets
         boxes = positive_rois
         if config.USE_MINI_MASK:
             # Transform ROI corrdinates from normalized image space
@@ -642,6 +697,15 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
             box_ids = box_ids.cuda()
         masks = Variable(CropAndResizeFunction(config.MASK_SHAPE[0], config.MASK_SHAPE[1], 0)(roi_masks.unsqueeze(1), boxes, box_ids).data, requires_grad=False)
         masks = masks.squeeze(1)
+        #print('Masks')
+        #print(masks.size())
+        #print('Gt_masks')
+        #print(gt_masks.size())
+        #print('roi_gt_box_assignment.data')
+        #print(roi_gt_box_assignment.data)
+        roi_masks = gt_masks[roi_gt_box_assignment.data,:,:]
+        #print('Roi_masks')
+        #print(roi_masks.size())
 
         # Threshold mask pixels at 0.5 to have GT masks be 0 or 1 to use with
         # binary cross entropy loss.
@@ -709,6 +773,19 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
             roi_gt_class_ids = roi_gt_class_ids.cuda()
             deltas = deltas.cuda()
             masks = masks.cuda()
+    print('masks')
+    print(masks.size())
+    print('Masks')
+    print(masks.size())
+    print('Gt_masks')
+    print(gt_masks.size())
+    print('rois')
+    print(rois.size())
+    #print('roi_gt_box_assignment.data')
+    # print(roi_gt_box_assignment.data)
+    #    roi_masks = gt_masks[roi_gt_box_assignment.data,:,:]
+    #print('Roi_masks')
+    #print(roi_masks.size())
 
     return rois, roi_gt_class_ids, deltas, masks
 
@@ -1107,10 +1184,17 @@ def compute_mrcnn_mask_loss(target_masks, target_class_ids, pred_masks):
         positive_ix = torch.nonzero(target_class_ids > 0)[:, 0]
         positive_class_ids = target_class_ids[positive_ix.data].long()
         indices = torch.stack((positive_ix, positive_class_ids), dim=1)
-
+        print('Initial')
+        print(target_masks.size())
+        print(pred_masks.size())
         # Gather the masks (predicted and true) that contribute to loss
         y_true = target_masks[indices[:,0].data,:,:]
         y_pred = pred_masks[indices[:,0].data,indices[:,1].data,:,:]
+
+        print('y_true')
+        print(y_true.size())
+        print('y_pred')
+        print(y_pred.size())
 
         # Binary cross entropy
         loss = F.binary_cross_entropy(y_pred, y_true)
@@ -1699,6 +1783,12 @@ class MaskRCNN(nn.Module):
             gt_boxes = input[3]
             gt_masks = input[4]
 
+            #print('Hello '*100)
+            #print('Boxes')
+            #print(gt_boxes)
+            #print('Masks')
+            #print(gt_masks)
+
             # Normalize coordinates
             h, w = self.config.IMAGE_SHAPE[:2]
             scale = Variable(torch.from_numpy(np.array([h, w, h, w])).float(), requires_grad=False)
@@ -1712,6 +1802,8 @@ class MaskRCNN(nn.Module):
             # padded. Equally, returned rois and targets are zero padded.
             rois, target_class_ids, target_deltas, target_mask = \
                 detection_target_layer(rpn_rois, gt_class_ids, gt_boxes, gt_masks, self.config)
+            #print('target_mask')
+            #print(target_mask)
 
             if not rois.size():
                 mrcnn_class_logits = Variable(torch.FloatTensor())
@@ -1730,6 +1822,8 @@ class MaskRCNN(nn.Module):
 
                 # Create masks for detections
                 mrcnn_mask = self.mask(mrcnn_feature_maps, rois)
+                #print('mrcnn_mask')
+                #print(mrcnn_mask)
 
             return [rpn_class_logits, rpn_bbox, target_class_ids, mrcnn_class_logits, target_deltas, mrcnn_bbox, target_mask, mrcnn_mask]
 

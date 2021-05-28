@@ -3,8 +3,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Function
-
+import sys
+import re
+import inspect as i
+import inspect
 from ._ext import crop_and_resize as _backend
+
+print('Backend')
+#print(*_backend)
+#print(inspect.getsource(_backend.compile))
+sys.stdout.write(i.getsource(_backend))
+
+#sys.exit()
 
 
 class CropAndResizeFunction(Function):
