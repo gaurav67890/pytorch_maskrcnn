@@ -532,6 +532,10 @@ def bbox_overlaps(boxes1, boxes2):
     # every boxes1 against every boxes2 without loops.
     # TF doesn't have an equivalent to np.repeate() so simulate it
     # using tf.tile() and tf.reshape.
+    print('Overlap check -- '*10)
+    print(boxes1)
+    print(boxes2)
+    print('--'*40)
     boxes1_repeat = boxes2.size()[0]
     boxes2_repeat = boxes1.size()[0]
     boxes1 = boxes1.repeat(1,boxes1_repeat).view(-1,4)
@@ -557,7 +561,8 @@ def bbox_overlaps(boxes1, boxes2):
     # 4. Compute IoU and reshape to [boxes1, boxes2]
     iou = intersection / union
     overlaps = iou.view(boxes2_repeat, boxes1_repeat)
-
+    print(overlaps)
+    print('--'*40)
     return overlaps
 
 def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
@@ -1241,6 +1246,10 @@ def load_image_gt(dataset, config, image_id, augment=False,
         of the image unless use_mini_mask is True, in which case they are
         defined in MINI_MASK_SHAPE.
     """
+    print('dataset '*30)
+    print(dataset)
+    print(config)
+    print(image_id)
     # Load image and mask
     image = dataset.load_image(image_id)
     mask, class_ids = dataset.load_mask(image_id)
@@ -1800,6 +1809,21 @@ class MaskRCNN(nn.Module):
             # Subsamples proposals and generates target outputs for training
             # Note that proposal class IDs, gt_boxes, and gt_masks are zero
             # padded. Equally, returned rois and targets are zero padded.
+
+            print('GROUND '*20)
+            print(gt_class_ids.shape)
+            #print(gt_class_ids.dtype)
+            print(gt_class_ids)
+            print('--------------')
+            print(gt_boxes.shape)
+            #print(gt_boxes.dtype)
+            print(gt_boxes)
+            print('--------------')
+            print(gt_masks.shape)
+            #print(gt_masks.dtype)
+            print(gt_masks)
+            print('--------------')
+
             rois, target_class_ids, target_deltas, target_mask = \
                 detection_target_layer(rpn_rois, gt_class_ids, gt_boxes, gt_masks, self.config)
             #print('target_mask')
